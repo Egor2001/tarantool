@@ -36,6 +36,7 @@
 #include <msgpuck.h>
 #include <small/ibuf.h>
 #include <small/obuf.h>
+#include <on_shutdown.h>
 #include "third_party/base64.h"
 #include <on_shutdown.h>
 
@@ -1280,6 +1281,7 @@ iproto_msg_decode(struct iproto_msg *msg, const char **pos, const char *reqend,
 			goto error;
 		cmsg_init(&msg->base, iproto_thread->sql_route);
 		break;
+	case IPROTO_SHUTDOWN:
 	case IPROTO_PING:
 		cmsg_init(&msg->base, iproto_thread->misc_route);
 		break;
@@ -1738,6 +1740,12 @@ tx_process_misc(struct cmsg *m)
 			iproto_reply_ok_xc(out, msg->header.sync,
 					   ::schema_version);
 			break;
+		case IPROTO_SHUTDOWN:
+			con->session->client_shutdown_got = true;
+			fiber_cond_broadcast(&con->session->shutdown_cond);
+			iproto_reply_ok_xc(out, msg->header.sync,
+					   ::schema_version);
+			break;
 		case IPROTO_PING:
 			iproto_reply_ok_xc(out, msg->header.sync,
 					   ::schema_version);
@@ -1947,6 +1955,8 @@ net_send_msg(struct cmsg *m)
 		if (! ev_is_active(&con->output))
 			ev_feed_event(con->loop, &con->output, EV_WRITE);
 	}
+	if (msg->header.type == IPROTO_SHUTDOWN)
+		shutdown(msg->connection->input.fd, SHUT_RD);
 	iproto_msg_delete(msg);
 }
 
