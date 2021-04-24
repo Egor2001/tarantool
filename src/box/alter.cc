@@ -987,6 +987,7 @@ alter_space_commit(struct trigger *trigger, void *event)
 {
 	struct txn *txn = (struct txn *) event;
 	struct alter_space *alter = (struct alter_space *) trigger->data;
+	trigger_clear(trigger);
 	/*
 	 * The engine (vinyl) expects us to pass the signature of
 	 * the row that performed this operation, not the signature
@@ -1031,6 +1032,7 @@ static int
 alter_space_rollback(struct trigger *trigger, void * /* event */)
 {
 	struct alter_space *alter = (struct alter_space *) trigger->data;
+	trigger_clear(trigger);
 	/* Rollback alter ops */
 	class AlterSpaceOp *op;
 	try {
@@ -1928,6 +1930,7 @@ on_drop_space_commit(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct space *space = (struct space *)trigger->data;
+	trigger_clear(trigger);
 	space_delete(space);
 	return 0;
 }
@@ -1942,6 +1945,7 @@ on_drop_space_rollback(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct space *space = (struct space *)trigger->data;
+	trigger_clear(trigger);
 	space_cache_replace(NULL, space);
 	return 0;
 }
@@ -2094,6 +2098,7 @@ on_create_view_commit(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
+	trigger_clear(trigger);
 	sql_select_delete(sql_get(), select);
 	return 0;
 }
@@ -2108,6 +2113,7 @@ on_create_view_rollback(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
+	trigger_clear(trigger);
 	update_view_references(select, -1, true, NULL);
 	sql_select_delete(sql_get(), select);
 	return 0;
@@ -2123,6 +2129,7 @@ on_drop_view_commit(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
+	trigger_clear(trigger);
 	sql_select_delete(sql_get(), select);
 	return 0;
 }
@@ -2137,6 +2144,7 @@ on_drop_view_rollback(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct Select *select = (struct Select *)trigger->data;
+	trigger_clear(trigger);
 	update_view_references(select, 1, true, NULL);
 	sql_select_delete(sql_get(), select);
 	return 0;
@@ -3465,6 +3473,7 @@ on_drop_func_commit(struct trigger *trigger, void * /* event */)
 {
 	/* Delete the old function. */
 	struct func *func = (struct func *)trigger->data;
+	trigger_clear(trigger);
 	func_delete(func);
 	return 0;
 }
@@ -3474,6 +3483,7 @@ on_drop_func_rollback(struct trigger *trigger, void * /* event */)
 {
 	/* Insert the old function back into the cache. */
 	struct func *func = (struct func *)trigger->data;
+	trigger_clear(trigger);
 	func_cache_insert(func);
 	if (trigger_run(&on_alter_func, func) != 0)
 		return -1;
@@ -3715,6 +3725,7 @@ on_drop_collation_commit(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct coll_id *coll_id = (struct coll_id *) trigger->data;
+	trigger_clear(trigger);
 	coll_id_delete(coll_id);
 	return 0;
 }
@@ -3725,6 +3736,7 @@ on_drop_collation_rollback(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct coll_id *coll_id = (struct coll_id *) trigger->data;
+	trigger_clear(trigger);
 	struct coll_id *replaced_id;
 	if (coll_id_cache_replace(coll_id, &replaced_id) != 0)
 		panic("Out of memory on insertion into collation cache");
@@ -4187,6 +4199,7 @@ static int
 register_replica(struct trigger *trigger, void * /* event */)
 {
 	struct tuple *new_tuple = (struct tuple *)trigger->data;
+	trigger_clear(trigger);
 	uint32_t id;
 	if (tuple_field_u32(new_tuple, BOX_CLUSTER_FIELD_ID, &id) != 0)
 		return -1;
@@ -4211,7 +4224,7 @@ static int
 unregister_replica(struct trigger *trigger, void * /* event */)
 {
 	struct tuple *old_tuple = (struct tuple *)trigger->data;
-
+	trigger_clear(trigger);
 	struct tt_uuid old_uuid;
 	if (tuple_field_uuid(old_tuple, BOX_CLUSTER_FIELD_UUID, &old_uuid) != 0)
 		return -1;
@@ -4392,6 +4405,7 @@ on_drop_sequence_commit(struct trigger *trigger, void * /* event */)
 {
 	/* Delete the old sequence. */
 	struct sequence *seq = (struct sequence *)trigger->data;
+	trigger_clear(trigger);
 	sequence_delete(seq);
 	return 0;
 }
@@ -4401,6 +4415,7 @@ on_drop_sequence_rollback(struct trigger *trigger, void * /* event */)
 {
 	/* Insert the old sequence back into the cache. */
 	struct sequence *seq = (struct sequence *)trigger->data;
+	trigger_clear(trigger);
 	sequence_cache_insert(seq);
 	if (trigger_run(&on_alter_sequence, seq) != 0)
 		return -1;
@@ -4413,6 +4428,7 @@ on_alter_sequence_commit(struct trigger *trigger, void * /* event */)
 {
 	/* Delete the old old sequence definition. */
 	struct sequence_def *def = (struct sequence_def *)trigger->data;
+	trigger_clear(trigger);
 	free(def);
 	return 0;
 }
@@ -4422,6 +4438,7 @@ on_alter_sequence_rollback(struct trigger *trigger, void * /* event */)
 {
 	/* Restore the old sequence definition. */
 	struct sequence_def *def = (struct sequence_def *)trigger->data;
+	trigger_clear(trigger);
 	struct sequence *seq = sequence_by_id(def->id);
 	assert(seq != NULL);
 	free(seq->def);
@@ -4837,6 +4854,7 @@ on_drop_trigger_rollback(struct trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
 	struct sql_trigger *new_trigger;
+	trigger_clear(trigger);
 	if (old_trigger == NULL)
 		return 0;
 	if (sql_trigger_replace(sql_trigger_name(old_trigger),
@@ -4856,6 +4874,7 @@ on_replace_trigger_rollback(struct trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
 	struct sql_trigger *new_trigger;
+	trigger_clear(trigger);
 	if (sql_trigger_replace(sql_trigger_name(old_trigger),
 				sql_trigger_space_id(old_trigger),
 				old_trigger, &new_trigger) != 0)
@@ -4872,6 +4891,7 @@ static int
 on_replace_trigger_commit(struct trigger *trigger, void * /* event */)
 {
 	struct sql_trigger *old_trigger = (struct sql_trigger *)trigger->data;
+	trigger_clear(trigger);
 	sql_trigger_delete(sql_get(), old_trigger);
 	return 0;
 }
@@ -5209,6 +5229,7 @@ on_create_fk_constraint_rollback(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct fk_constraint *fk = (struct fk_constraint *)trigger->data;
+	trigger_clear(trigger);
 	rlist_del_entry(fk, in_parent_space);
 	rlist_del_entry(fk, in_child_space);
 	struct space *child = space_by_id(fk->def->child_id);
@@ -5226,6 +5247,7 @@ on_replace_fk_constraint_rollback(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct fk_constraint *old_fk = (struct fk_constraint *)trigger->data;
+	trigger_clear(trigger);
 	struct space *parent = space_by_id(old_fk->def->parent_id);
 	struct space *child = space_by_id(old_fk->def->child_id);
 	struct fk_constraint *new_fk =
@@ -5245,6 +5267,7 @@ on_drop_fk_constraint_rollback(struct trigger *trigger, void *event)
 {
 	(void) event;
 	struct fk_constraint *old_fk = (struct fk_constraint *)trigger->data;
+	trigger_clear(trigger);
 	struct space *parent = space_by_id(old_fk->def->parent_id);
 	struct space *child = space_by_id(old_fk->def->child_id);
 	if (space_insert_constraint_id(child, CONSTRAINT_TYPE_FK,
@@ -5271,6 +5294,7 @@ on_drop_or_replace_fk_constraint_commit(struct trigger *trigger, void *event)
 {
 	(void) event;
 	fk_constraint_delete((struct fk_constraint *) trigger->data);
+	trigger_clear(trigger);
 	return 0;
 }
 
@@ -5312,8 +5336,9 @@ error:
 
 /** A trigger invoked on replace in the _fk_constraint space. */
 static int
-on_replace_dd_fk_constraint(struct trigger * /* trigger*/, void *event)
+on_replace_dd_fk_constraint(struct trigger *trigger, void *event)
 {
+	trigger_clear(trigger);
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
 	struct tuple *old_tuple = stmt->old_tuple;
@@ -5570,6 +5595,7 @@ static int
 on_create_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
+	trigger_clear(trigger);
 	assert(ck != NULL);
 	struct space *space = space_by_id(ck->def->space_id);
 	assert(space != NULL);
@@ -5588,6 +5614,7 @@ static int
 on_drop_ck_constraint_commit(struct trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
+	trigger_clear(trigger);
 	assert(ck != NULL);
 	ck_constraint_delete(ck);
 	return 0;
@@ -5598,6 +5625,7 @@ static int
 on_drop_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
+	trigger_clear(trigger);
 	assert(ck != NULL);
 	struct space *space = space_by_id(ck->def->space_id);
 	assert(space != NULL);
@@ -5616,6 +5644,7 @@ static int
 on_replace_ck_constraint_commit(struct trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
+	trigger_clear(trigger);
 	if (ck != NULL)
 		ck_constraint_delete(ck);
 	return 0;
@@ -5626,6 +5655,7 @@ static int
 on_replace_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
 {
 	struct ck_constraint *ck = (struct ck_constraint *)trigger->data;
+	trigger_clear(trigger);
 	assert(ck != NULL);
 	struct space *space = space_by_id(ck->def->space_id);
 	assert(space != NULL);
@@ -5642,8 +5672,9 @@ on_replace_ck_constraint_rollback(struct trigger *trigger, void * /* event */)
 
 /** A trigger invoked on replace in the _ck_constraint space. */
 static int
-on_replace_dd_ck_constraint(struct trigger * /* trigger*/, void *event)
+on_replace_dd_ck_constraint(struct trigger *trigger, void *event)
 {
+	trigger_clear(trigger);
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
 	struct tuple *old_tuple = stmt->old_tuple;
@@ -5775,7 +5806,7 @@ on_replace_dd_ck_constraint(struct trigger * /* trigger*/, void *event)
 static int
 on_replace_dd_func_index(struct trigger *trigger, void *event)
 {
-	(void) trigger;
+	trigger_clear(trigger);
 	struct txn *txn = (struct txn *) event;
 	struct txn_stmt *stmt = txn_current_stmt(txn);
 	struct tuple *old_tuple = stmt->old_tuple;

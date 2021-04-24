@@ -54,7 +54,7 @@ static int
 txn_on_yield(struct trigger *trigger, void *event);
 
 static void
-txn_run_rollback_triggers(struct txn *txn, struct rlist *triggers);
+txn_run_rollback_triggers(struct txn *txn);
 
 static int
 txn_add_redo(struct txn *txn, struct txn_stmt *stmt, struct request *request)
@@ -150,7 +150,7 @@ txn_rollback_one_stmt(struct txn *txn, struct txn_stmt *stmt)
 	if (txn->engine != NULL && stmt->space != NULL)
 		engine_rollback_statement(txn->engine, txn, stmt);
 	if (stmt->has_triggers)
-		txn_run_rollback_triggers(txn, &stmt->on_rollback);
+		txn_run_rollback_triggers(txn);
 }
 
 static void
@@ -438,8 +438,9 @@ fail:
  * A helper function to process on_commit triggers.
  */
 static void
-txn_run_commit_triggers(struct txn *txn, struct rlist *triggers)
+txn_run_commit_triggers(struct txn *txn)
 {
+	struct rlist *triggers = &txn->on_commit;
 	/*
 	 * Commit triggers must be run in the same order they
 	 * were added so that a trigger sees the changes done
@@ -454,14 +455,21 @@ txn_run_commit_triggers(struct txn *txn, struct rlist *triggers)
 		unreachable();
 		panic("commit trigger failed");
 	}
+	/*
+	 * Destroy here, not in txn_free() so as not to try to walk the lists
+	 * when the transaction has no any triggers.
+	 */
+	trigger_destroy(triggers);
+	trigger_destroy(&txn->on_rollback);
 }
 
 /*
  * A helper function to process on_rollback triggers.
  */
 static void
-txn_run_rollback_triggers(struct txn *txn, struct rlist *triggers)
+txn_run_rollback_triggers(struct txn *txn)
 {
+	struct rlist *triggers = &txn->on_rollback;
 	if (trigger_run(triggers, txn) != 0) {
 		/*
 		 * As transaction couldn't handle a trigger error so
@@ -471,6 +479,12 @@ txn_run_rollback_triggers(struct txn *txn, struct rlist *triggers)
 		unreachable();
 		panic("rollback trigger failed");
 	}
+	/*
+	 * Destroy here, not in txn_free() so as not to try to walk the lists
+	 * when the transaction has no any triggers.
+	 */
+	trigger_destroy(&txn->on_commit);
+	trigger_destroy(triggers);
 }
 
 /* A helper function to process on_wal_write triggers. */
@@ -523,7 +537,7 @@ txn_complete_fail(struct txn *txn)
 	if (txn->engine != NULL)
 		engine_rollback(txn->engine, txn);
 	if (txn_has_flag(txn, TXN_HAS_TRIGGERS))
-		txn_run_rollback_triggers(txn, &txn->on_rollback);
+		txn_run_rollback_triggers(txn);
 	txn_free_or_wakeup(txn);
 }
 
@@ -537,7 +551,7 @@ txn_complete_success(struct txn *txn)
 	if (txn->engine != NULL)
 		engine_commit(txn->engine, txn);
 	if (txn_has_flag(txn, TXN_HAS_TRIGGERS))
-		txn_run_commit_triggers(txn, &txn->on_commit);
+		txn_run_commit_triggers(txn);
 	txn_free_or_wakeup(txn);
 }
 

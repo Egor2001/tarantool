@@ -4326,6 +4326,7 @@ vy_deferred_delete_on_commit(struct trigger *trigger, void *event)
 {
 	struct txn *txn = event;
 	struct vy_mem *mem = trigger->data;
+	trigger_clear(trigger);
 	/*
 	 * Update dump_lsn so that we can skip dumped deferred
 	 * DELETE statements on WAL recovery.
@@ -4342,6 +4343,7 @@ vy_deferred_delete_on_rollback(struct trigger *trigger, void *event)
 {
 	(void)event;
 	struct vy_mem *mem = trigger->data;
+	trigger_clear(trigger);
 	/* Unpin the mem pinned in vy_deferred_delete_on_replace(). */
 	vy_mem_unpin(mem);
 	return 0;
