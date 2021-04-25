@@ -67,6 +67,10 @@ typedef __m128i tt_bitset_word_t;
 #elif defined(__x86_64__)
 typedef uint64_t tt_bitset_word_t;
 #define BITSET_PAGE_DATA_ALIGNMENT 1
+#elif defined(ENABLE_NEON) && defined(__aarch64__)
+#include <arm_neon.h>
+typedef uint64x2_t tt_bitset_word_t;
+#define BITSET_PAGE_DATA_ALIGNMENT 16
 #else
 #define BITSET_PAGE_DATA_ALIGNMENT 1
 typedef uint32_t tt_bitset_word_t;
