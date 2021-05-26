@@ -58,6 +58,7 @@ restart:
 			f->caller = rlist_shift_entry(&pool->idle,
 						      struct fiber,
 						      state);
+			f->caller->flags &= ~FIBER_IS_IDLE;
 			f->caller->flags |= FIBER_IS_READY;
 			assert(f->caller->caller == &cord->sched);
 		}
@@ -82,8 +83,11 @@ restart:
 		 * Add the fiber to the front of the list, so that
 		 * it is most likely to get scheduled again.
 		 */
+		f->flags |= FIBER_IS_IDLE;
 		rlist_add_entry(&pool->idle, fiber(), state);
 		fiber_yield();
+		f->flags &= ~FIBER_IS_IDLE;
+
 		goto restart;
 	}
 	pool->size--;
@@ -105,6 +109,7 @@ fiber_pool_idle_cb(ev_loop *loop, struct ev_timer *watcher, int events)
 		 * scheduled lately.
 		 */
 		f = rlist_shift_tail_entry(&pool->idle, struct fiber, state);
+		f->flags &= ~FIBER_IS_IDLE;
 		fiber_call(f);
 	}
 	ev_timer_again(loop, watcher);
@@ -125,6 +130,7 @@ fiber_pool_cb(ev_loop *loop, struct ev_watcher *watcher, int events)
 		struct fiber *f;
 		if (! rlist_empty(&pool->idle)) {
 			f = rlist_shift_entry(&pool->idle, struct fiber, state);
+			f->flags &= ~FIBER_IS_IDLE;
 			fiber_call(f);
 		} else if (pool->size < pool->max_size) {
 			f = fiber_new(cord_name(cord()), fiber_pool_f);
@@ -185,8 +191,10 @@ fiber_pool_destroy(struct fiber_pool *pool)
 	 */
 	pool->idle_timeout = 0;
 	struct fiber *idle_fiber;
-	rlist_foreach_entry(idle_fiber, &pool->idle, state)
+	rlist_foreach_entry(idle_fiber, &pool->idle, state) {
+		idle_fiber->flags &= ~FIBER_IS_IDLE;
 		fiber_wakeup(idle_fiber);
+	}
 	/**
 	 * Just wait on fiber exit condition until all fibers are done
 	 */

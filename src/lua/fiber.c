@@ -267,6 +267,9 @@ lbox_fiber_statof(struct fiber *f, void *cb_ctx, bool backtrace)
 {
 	struct lua_State *L = (struct lua_State *) cb_ctx;
 
+	if (f->flags & FIBER_IS_IDLE)
+		return 0;
+
 	lua_pushinteger(L, f->fid);
 	lua_newtable(L);
 

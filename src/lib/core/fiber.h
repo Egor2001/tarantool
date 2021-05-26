@@ -162,6 +162,11 @@ enum {
 	 * This flag is set when fiber uses custom stack size.
 	 */
 	FIBER_CUSTOM_STACK	= 1 << 5,
+	/**
+	 * This flag is set when fiber is in the idle list
+	 * of fiber_pool.
+	 */
+	FIBER_IS_IDLE		= 1 << 6,
 	FIBER_DEFAULT_FLAGS = FIBER_IS_CANCELLABLE
 };
 
